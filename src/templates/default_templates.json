@@ -1,0 +1,330 @@
+{
+  "version": "1.0.0",
+  "description": "Paperless Regex Extractor - Hazır Şablonlar",
+  "templates": {
+    "banking": {
+      "name": "Bankacılık",
+      "description": "Türk bankaları için hazır şablonlar",
+      "fields": [
+        {
+          "name": "IBAN",
+          "data_type": "string",
+          "extraction_pattern": "(?:IBAN|HESAP).*?(TR\\d{2}[\\s\\d]{22,26})",
+          "extraction_group": 1,
+          "description": "Türk IBAN numarası (TR ile başlayan 26 karakter)"
+        },
+        {
+          "name": "Hesap Numarası",
+          "data_type": "string",
+          "extraction_pattern": "HESAP\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{10,16})",
+          "extraction_group": 1,
+          "description": "Banka hesap numarası (10-16 haneli)"
+        },
+        {
+          "name": "EFT Referans No",
+          "data_type": "string",
+          "extraction_pattern": "(?:EFT|HAVALE)\\s*(?:SORGU|REF(?:ERANS)?)?\\s*NO\\s*[:\\s]*(\\d{12,20})",
+          "extraction_group": 1,
+          "description": "EFT/Havale referans numarası"
+        },
+        {
+          "name": "İşlem Tutarı",
+          "data_type": "monetary",
+          "extraction_pattern": "(?:TUTAR|MEBLAĞ|BEDEL)\\s*[:\\s]*([\\d.,]+)\\s*(?:TL|TRY|₺)",
+          "extraction_group": 1,
+          "description": "Para tutarı (TL formatında)"
+        },
+        {
+          "name": "İşlem Tarihi",
+          "data_type": "string",
+          "extraction_pattern": "(?:İŞLEM|DEĞER|VALÖR)\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "İşlem tarihi (DD.MM.YYYY formatında)"
+        },
+        {
+          "name": "Alıcı Adı",
+          "data_type": "string",
+          "extraction_pattern": "ALICI\\s*(?:AD|UNVAN)\\s*[:\\n\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü\\s]+?)\\s*(?:ALICI|IBAN|$)",
+          "extraction_group": 1,
+          "description": "Alıcı adı soyadı veya ünvanı"
+        },
+        {
+          "name": "Gönderen Şube",
+          "data_type": "string",
+          "extraction_pattern": "(?:GÖNDEREN|GÖNDERİCİ)\\s*ŞUBE\\s*[:\\s]*([^\\n]+)",
+          "extraction_group": 1,
+          "description": "Gönderen banka şubesi"
+        }
+      ]
+    },
+    "invoices": {
+      "name": "Faturalar",
+      "description": "Fatura belgeleri için hazır şablonlar",
+      "fields": [
+        {
+          "name": "Fatura No",
+          "data_type": "string",
+          "extraction_pattern": "FATURA\\s*(?:NO|NUMARASI)?\\s*[:\\s]*([A-Z]{0,3}\\d{4,}(?:[A-Z0-9]*)?)",
+          "extraction_group": 1,
+          "description": "Fatura numarası"
+        },
+        {
+          "name": "Fatura Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "FATURA\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Fatura düzenlenme tarihi"
+        },
+        {
+          "name": "Vade Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "VADE\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Ödeme vadesi"
+        },
+        {
+          "name": "Toplam Tutar",
+          "data_type": "monetary",
+          "extraction_pattern": "(?:TOPLAM|GENEL\\s*TOPLAM)\\s*[:\\s]*([\\d.,]+)\\s*(?:TL|TRY|₺)?",
+          "extraction_group": 1,
+          "description": "Fatura toplam tutarı"
+        },
+        {
+          "name": "KDV Tutarı",
+          "data_type": "monetary",
+          "extraction_pattern": "KDV\\s*(?:TUTARI)?\\s*[:\\s]*([\\d.,]+)\\s*(?:TL|TRY|₺)?",
+          "extraction_group": 1,
+          "description": "KDV tutarı"
+        },
+        {
+          "name": "Vergi No",
+          "data_type": "string",
+          "extraction_pattern": "VERGİ\\s*(?:DAİRESİ)?\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{10,11})",
+          "extraction_group": 1,
+          "description": "Vergi kimlik numarası (10-11 haneli)"
+        },
+        {
+          "name": "TC Kimlik No",
+          "data_type": "string",
+          "extraction_pattern": "T\\.?C\\.?\\s*(?:KİMLİK)?\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{11})",
+          "extraction_group": 1,
+          "description": "TC Kimlik numarası (11 haneli)"
+        }
+      ]
+    },
+    "utilities": {
+      "name": "Fatura/Abonelik",
+      "description": "Elektrik, su, doğalgaz faturaları",
+      "fields": [
+        {
+          "name": "Tesisat Numarası",
+          "data_type": "string",
+          "extraction_pattern": "(?:TESİSAT|ABONE)\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{8,12})",
+          "extraction_group": 1,
+          "description": "Tesisat/Abone numarası"
+        },
+        {
+          "name": "Sayaç Numarası",
+          "data_type": "string",
+          "extraction_pattern": "SAYAÇ\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{6,12})",
+          "extraction_group": 1,
+          "description": "Sayaç numarası"
+        },
+        {
+          "name": "Tüketim Miktarı",
+          "data_type": "float",
+          "extraction_pattern": "TÜKETİM\\s*[:\\s]*([\\d.,]+)\\s*(?:kWh|m³|m3)",
+          "extraction_group": 1,
+          "description": "Tüketim miktarı (kWh veya m³)"
+        },
+        {
+          "name": "Son Ödeme Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "SON\\s*ÖDEME\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Son ödeme tarihi"
+        },
+        {
+          "name": "Dönem",
+          "data_type": "string",
+          "extraction_pattern": "DÖNEM\\s*[:\\s]*(\\d{4}[/-]\\d{2}|[A-ZŞİĞÜÇÖa-zşığüçö]+\\s*\\d{4})",
+          "extraction_group": 1,
+          "description": "Fatura dönemi"
+        }
+      ]
+    },
+    "contracts": {
+      "name": "Sözleşmeler",
+      "description": "Sözleşme belgeleri için şablonlar",
+      "fields": [
+        {
+          "name": "Sözleşme No",
+          "data_type": "string",
+          "extraction_pattern": "SÖZLEŞME\\s*(?:NO|NUMARASI)?\\s*[:\\s]*([A-Z0-9-]+)",
+          "extraction_group": 1,
+          "description": "Sözleşme numarası"
+        },
+        {
+          "name": "Sözleşme Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "SÖZLEŞME\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Sözleşme imza tarihi"
+        },
+        {
+          "name": "Başlangıç Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "BAŞLANGIÇ\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Sözleşme başlangıç tarihi"
+        },
+        {
+          "name": "Bitiş Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "BİTİŞ\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Sözleşme bitiş tarihi"
+        },
+        {
+          "name": "Taraf 1",
+          "data_type": "string",
+          "extraction_pattern": "(?:TARAF\\s*1|KİRACI|ALICI|MÜŞTERİ)\\s*[:\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü\\s]+?)(?:\\n|TARAF)",
+          "extraction_group": 1,
+          "description": "Birinci taraf adı"
+        },
+        {
+          "name": "Taraf 2",
+          "data_type": "string",
+          "extraction_pattern": "(?:TARAF\\s*2|EV\\s*SAHİBİ|SATICI|FİRMA)\\s*[:\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü\\s]+?)(?:\\n|$)",
+          "extraction_group": 1,
+          "description": "İkinci taraf adı"
+        }
+      ]
+    },
+    "receipts": {
+      "name": "Makbuzlar",
+      "description": "Makbuz ve fiş belgeleri",
+      "fields": [
+        {
+          "name": "Fiş No",
+          "data_type": "string",
+          "extraction_pattern": "(?:FİŞ|MAKBUZ)\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d+)",
+          "extraction_group": 1,
+          "description": "Fiş veya makbuz numarası"
+        },
+        {
+          "name": "Ödeme Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "(?:ÖDEME|İŞLEM)\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Ödeme yapılan tarih"
+        },
+        {
+          "name": "Ödeme Tutarı",
+          "data_type": "monetary",
+          "extraction_pattern": "(?:ÖDENEN|TAHSİL\\s*EDİLEN|ALINAN)\\s*(?:TUTAR)?\\s*[:\\s]*([\\d.,]+)\\s*(?:TL|TRY|₺)?",
+          "extraction_group": 1,
+          "description": "Ödenen tutar"
+        },
+        {
+          "name": "Ödeme Yöntemi",
+          "data_type": "string",
+          "extraction_pattern": "ÖDEME\\s*(?:TÜRÜ|YÖNTEMİ|ŞEKLİ)\\s*[:\\s]*(NAKİT|KREDİ\\s*KARTI|BANKA\\s*KARTI|HAVALE|EFT)",
+          "extraction_group": 1,
+          "description": "Ödeme yöntemi (nakit, kart, havale vb.)"
+        }
+      ]
+    },
+    "identity": {
+      "name": "Kimlik Belgeleri",
+      "description": "Kimlik ve kişisel belgeler",
+      "fields": [
+        {
+          "name": "TC Kimlik No",
+          "data_type": "string",
+          "extraction_pattern": "T\\.?C\\.?\\s*(?:KİMLİK)?\\s*(?:NO|NUMARASI)?\\s*[:\\s]*(\\d{11})",
+          "extraction_group": 1,
+          "description": "11 haneli TC Kimlik numarası"
+        },
+        {
+          "name": "Ad Soyad",
+          "data_type": "string",
+          "extraction_pattern": "(?:ADI?\\s*SOYADI?|İSİM)\\s*[:\\s]*([A-ZÇĞİÖŞÜ][a-zçğıöşü]+\\s+[A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü]+)",
+          "extraction_group": 1,
+          "description": "Ad ve soyad"
+        },
+        {
+          "name": "Doğum Tarihi",
+          "data_type": "date",
+          "extraction_pattern": "DOĞUM\\s*TARİHİ\\s*[:\\s]*(\\d{2}[./]\\d{2}[./]\\d{4})",
+          "extraction_group": 1,
+          "description": "Doğum tarihi"
+        },
+        {
+          "name": "Doğum Yeri",
+          "data_type": "string",
+          "extraction_pattern": "DOĞUM\\s*YERİ\\s*[:\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü]+)",
+          "extraction_group": 1,
+          "description": "Doğum yeri (il)"
+        },
+        {
+          "name": "Seri No",
+          "data_type": "string",
+          "extraction_pattern": "SERİ\\s*(?:NO)?\\s*[:\\s]*([A-Z]\\d{2}[A-Z]\\d{5})",
+          "extraction_group": 1,
+          "description": "Kimlik seri numarası"
+        }
+      ]
+    },
+    "shipping": {
+      "name": "Kargo/Gönderi",
+      "description": "Kargo ve gönderi belgeleri",
+      "fields": [
+        {
+          "name": "Takip No",
+          "data_type": "string",
+          "extraction_pattern": "(?:TAKİP|GÖNDERI|KARGO)\\s*(?:NO|NUMARASI)?\\s*[:\\s]*([A-Z0-9]{10,20})",
+          "extraction_group": 1,
+          "description": "Kargo takip numarası"
+        },
+        {
+          "name": "Gönderici",
+          "data_type": "string",
+          "extraction_pattern": "GÖNDERİCİ\\s*[:\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü\\s]+?)(?:\\n|ALICI)",
+          "extraction_group": 1,
+          "description": "Gönderici adı"
+        },
+        {
+          "name": "Alıcı",
+          "data_type": "string",
+          "extraction_pattern": "ALICI\\s*[:\\s]*([A-ZÇĞİÖŞÜa-zçğıöşü\\s]+?)(?:\\n|ADRES)",
+          "extraction_group": 1,
+          "description": "Alıcı adı"
+        },
+        {
+          "name": "Ağırlık",
+          "data_type": "float",
+          "extraction_pattern": "AĞIRLIK\\s*[:\\s]*([\\d.,]+)\\s*(?:kg|KG|gr|GR)",
+          "extraction_group": 1,
+          "description": "Kargo ağırlığı"
+        },
+        {
+          "name": "Desi",
+          "data_type": "float",
+          "extraction_pattern": "DESİ\\s*[:\\s]*([\\d.,]+)",
+          "extraction_group": 1,
+          "description": "Kargo desi değeri"
+        }
+      ]
+    }
+  },
+  "common_patterns": {
+    "turkish_date": "(\\d{2}[./]\\d{2}[./]\\d{4})",
+    "turkish_currency": "([\\d.,]+)\\s*(?:TL|TRY|₺)",
+    "iban": "(TR\\d{2}[\\s\\d]{22,26})",
+    "tc_kimlik": "(\\d{11})",
+    "vergi_no": "(\\d{10,11})",
+    "phone": "(?:\\+90|0)?\\s*\\(?(\\d{3})\\)?[\\s.-]*(\\d{3})[\\s.-]*(\\d{2})[\\s.-]*(\\d{2})",
+    "email": "([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})"
+  }
+}
