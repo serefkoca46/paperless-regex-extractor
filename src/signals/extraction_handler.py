@@ -14,10 +14,6 @@ import re
 import logging
 from typing import Optional, Any, Dict, List
 
-from django.dispatch import receiver
-from documents.signals import document_consumption_finished
-from documents.models import Document, CustomField, CustomFieldInstance
-
 
 logger = logging.getLogger('paperless.regex_extractor')
 
@@ -73,13 +69,16 @@ class RegexExtractor:
         return None
     
     @staticmethod
-    def get_extraction_fields() -> List[CustomField]:
+    def get_extraction_fields():
         """
         Extraction aktif olan özel alanları getirir.
         
         Returns:
             CustomField listesi
         """
+        # Lazy import to avoid circular dependency
+        from documents.models import CustomField
+        
         return CustomField.objects.filter(
             extraction_enabled=True,
             extraction_pattern__isnull=False
@@ -137,12 +136,7 @@ class RegexExtractor:
             return value  # Dönüştürme başarısız, string olarak döndür
 
 
-@receiver(document_consumption_finished)
-def auto_extract_custom_fields(
-    sender,
-    document: Document,
-    **kwargs
-) -> Dict[str, Any]:
+def auto_extract_custom_fields(sender, document, **kwargs) -> Dict[str, Any]:
     """
     Doküman consume edildikten sonra otomatik regex extraction yapar.
     
@@ -154,6 +148,9 @@ def auto_extract_custom_fields(
     Returns:
         Çıkarılan değerlerin dict'i
     """
+    # Lazy imports to avoid circular dependency
+    from documents.models import CustomFieldInstance
+    
     extractor = RegexExtractor()
     results = {}
     
@@ -165,7 +162,12 @@ def auto_extract_custom_fields(
         return results
     
     # Extraction aktif alanları getir
-    extraction_fields = extractor.get_extraction_fields()
+    try:
+        extraction_fields = extractor.get_extraction_fields()
+    except Exception as e:
+        # Eğer extraction alanları henüz eklenmemişse hata verme
+        logger.debug(f"Extraction alanları alınamadı: {e}")
+        return results
     
     if not extraction_fields:
         logger.debug("Extraction aktif özel alan bulunamadı")
@@ -181,7 +183,7 @@ def auto_extract_custom_fields(
             raw_value = extractor.extract_value(
                 content=content,
                 pattern=field.extraction_pattern,
-                group=field.extraction_group or 1
+                group=getattr(field, 'extraction_group', 1) or 1
             )
             
             if raw_value:
@@ -228,6 +230,17 @@ def auto_extract_custom_fields(
     return results
 
 
+# Signal bağlantısı - lazy loading ile
+def connect_signal():
+    """Signal'ı bağla - Django app hazır olduktan sonra çağrılmalı"""
+    from documents.signals import document_consumption_finished
+    
+    document_consumption_finished.connect(
+        auto_extract_custom_fields,
+        dispatch_uid='regex_extractor_auto_extract'
+    )
+
+
 # Test fonksiyonu
 def test_extraction():
     """
@@ -269,6 +282,6 @@ def test_extraction():
         )
         
         status = '✓' if result == test['expected'] else '✗'
-        print(f"{status} {test['name']}: '{result}' (beklenen: '{test['expected']}')") 
+        print(f"{status} {test['name']}: '{result}' (beklenen: '{test['expected']}')")
     
     print("\n=== Test Tamamlandı ===")
