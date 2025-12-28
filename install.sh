@@ -30,7 +30,7 @@ cat << 'EOF'
 ║ /_/    \___/\__, /\___/_/|_|\__(_)_/   \__,_/_/ /_/\___/      ║
 ║            /____/                                              ║
 ║                                                                ║
-║            Paperless Regex Extractor v1.0.0                    ║
+║            Paperless Regex Extractor v1.1.0                    ║
 ║      Otomatik Değer Çıkarma Eklentisi - Paperless-ngx          ║
 ╚═══════════════════════════════════════════════════════════════╝
 EOF
@@ -75,6 +75,30 @@ find_paperless_dir() {
     # Docker volume kontrol
     if [[ -d "/usr/src/paperless/src/documents" ]]; then
         echo "/usr/src/paperless"
+        return 0
+    fi
+    
+    return 1
+}
+
+# En son migration'ı bul
+get_latest_migration() {
+    local migrations_dir="$1"
+    
+    # En yüksek numaralı migration'ı bul
+    local latest=$(ls -1 "$migrations_dir"/*.py 2>/dev/null | \
+        grep -v '__pycache__' | \
+        grep -v '__init__' | \
+        sed 's/.*\///' | \
+        grep -E '^[0-9]+_' | \
+        sort -t'_' -k1 -n | \
+        tail -1)
+    
+    if [[ -n "$latest" ]]; then
+        # Dosya adından numarayı ve tam adı çıkar
+        local num=$(echo "$latest" | grep -oE '^[0-9]+')
+        local name=$(echo "$latest" | sed 's/\.py$//')
+        echo "$num:$name"
         return 0
     fi
     
@@ -140,14 +164,66 @@ install_files() {
     
     log_success "Dosyalar indirildi"
     
-    # Dosyaları kopyala
-    log_info "Dosyalar kurulum dizinine kopyalanıyor..."
-    
-    # Migration
+    # Migration dosyasını dinamik olarak güncelle
     MIGRATIONS_DIR="$PAPERLESS_DIR/src/documents/migrations"
     if [[ -d "$MIGRATIONS_DIR" ]]; then
-        cp "$TEMP_DIR/0001_add_extraction_fields.py" "$MIGRATIONS_DIR/"
-        log_success "Migration kopyalandı: $MIGRATIONS_DIR/"
+        log_info "En son migration tespit ediliyor..."
+        
+        LATEST_INFO=$(get_latest_migration "$MIGRATIONS_DIR")
+        if [[ -n "$LATEST_INFO" ]]; then
+            LATEST_NUM=$(echo "$LATEST_INFO" | cut -d':' -f1)
+            LATEST_NAME=$(echo "$LATEST_INFO" | cut -d':' -f2)
+            NEW_NUM=$((LATEST_NUM + 1))
+            
+            log_success "En son migration: $LATEST_NAME (No: $LATEST_NUM)"
+            log_info "Yeni migration numarası: $NEW_NUM"
+            
+            # Migration dosyasını güncelle
+            NEW_MIGRATION_FILE="${NEW_NUM}_add_extraction_fields.py"
+            
+            # Dependency'yi güncelle
+            sed -i.bak "s/dependencies = \[.*\]/dependencies = [\n        ('documents', '$LATEST_NAME'),\n    ]/" \
+                "$TEMP_DIR/0001_add_extraction_fields.py" 2>/dev/null || \
+            sed "s/dependencies = \[.*\]/dependencies = [\n        ('documents', '$LATEST_NAME'),\n    ]/" \
+                "$TEMP_DIR/0001_add_extraction_fields.py" > "$TEMP_DIR/temp_migration.py" && \
+                mv "$TEMP_DIR/temp_migration.py" "$TEMP_DIR/0001_add_extraction_fields.py"
+            
+            # Doğrudan Python ile güncelle (daha güvenilir)
+            python3 << PYEOF
+import re
+
+# Migration dosyasını oku
+with open("$TEMP_DIR/0001_add_extraction_fields.py", "r") as f:
+    content = f.read()
+
+# Dependencies satırını güncelle
+new_deps = """dependencies = [
+        ('documents', '$LATEST_NAME'),
+    ]"""
+
+# Regex ile değiştir
+content = re.sub(
+    r"dependencies\s*=\s*\[.*?\]",
+    new_deps,
+    content,
+    flags=re.DOTALL
+)
+
+# Yaz
+with open("$TEMP_DIR/0001_add_extraction_fields.py", "w") as f:
+    f.write(content)
+
+print("Migration dependency güncellendi: $LATEST_NAME")
+PYEOF
+            
+            # Yeni isimle kopyala
+            cp "$TEMP_DIR/0001_add_extraction_fields.py" "$MIGRATIONS_DIR/$NEW_MIGRATION_FILE"
+            log_success "Migration kopyalandı: $MIGRATIONS_DIR/$NEW_MIGRATION_FILE"
+        else
+            log_warning "Mevcut migration bulunamadı, varsayılan kullanılıyor"
+            cp "$TEMP_DIR/0001_add_extraction_fields.py" "$MIGRATIONS_DIR/"
+            log_success "Migration kopyalandı: $MIGRATIONS_DIR/"
+        fi
     else
         log_warning "Migrations dizini bulunamadı: $MIGRATIONS_DIR"
     fi
@@ -168,21 +244,26 @@ install_files() {
     rm -rf "$TEMP_DIR"
 }
 
-# Signal handler'ı aktifleştir
+# Signal handler'ı aktifleştir (Lazy import ile)
 activate_handler() {
-    log_info "Signal handler aktifleştiriliyor..."
+    log_info "Signal handler aktifleştiriliyor (lazy import)..."
     
     SIGNALS_INIT="$PAPERLESS_DIR/src/documents/signals/__init__.py"
-    HANDLER_IMPORT="from .extraction_handler import auto_extract_custom_fields"
+    
+    # Lazy import kullan - circular import'u önlemek için
+    HANDLER_IMPORT="# Paperless Regex Extractor - Lazy signal binding
+try:
+    from .extraction_handler import connect_signal
+except ImportError:
+    pass"
     
     if [[ -f "$SIGNALS_INIT" ]]; then
         if grep -q "extraction_handler" "$SIGNALS_INIT"; then
             log_success "Handler zaten aktif"
         else
             echo "" >> "$SIGNALS_INIT"
-            echo "# Paperless Regex Extractor" >> "$SIGNALS_INIT"
             echo "$HANDLER_IMPORT" >> "$SIGNALS_INIT"
-            log_success "Handler __init__.py'a eklendi"
+            log_success "Handler __init__.py'a eklendi (lazy import)"
         fi
     else
         # __init__.py yoksa oluştur
@@ -190,20 +271,143 @@ activate_handler() {
         echo "$HANDLER_IMPORT" >> "$SIGNALS_INIT"
         log_success "__init__.py oluşturuldu ve handler eklendi"
     fi
+    
+    # apps.py'a signal connection ekle
+    APPS_FILE="$PAPERLESS_DIR/src/documents/apps.py"
+    if [[ -f "$APPS_FILE" ]]; then
+        if grep -q "connect_signal" "$APPS_FILE"; then
+            log_success "Signal connection zaten apps.py'da mevcut"
+        else
+            log_info "apps.py'a signal connection ekleniyor..."
+            
+            # Python ile apps.py'ı güncelle
+            python3 << PYEOF
+import re
+
+with open("$APPS_FILE", "r") as f:
+    content = f.read()
+
+# ready() metodunu bul ve signal connection ekle
+if "def ready(self):" in content:
+    # ready() metodunun sonuna ekle
+    signal_code = '''
+        # Paperless Regex Extractor - Signal bağlantısı
+        try:
+            from documents.signals.extraction_handler import connect_signal
+            connect_signal()
+        except Exception:
+            pass  # Extraction modülü kurulu değilse sessizce geç
+'''
+    
+    # ready() metodunun içine ekle
+    # Mevcut ready() içeriğinin sonuna ekle
+    if "connect_signal" not in content:
+        # ready metodunun sonunu bul ve ekle
+        lines = content.split('\n')
+        new_lines = []
+        in_ready = False
+        ready_indent = 0
+        
+        for i, line in enumerate(lines):
+            new_lines.append(line)
+            
+            if "def ready(self):" in line:
+                in_ready = True
+                ready_indent = len(line) - len(line.lstrip()) + 4
+            elif in_ready:
+                # ready() metodunun sonunu tespit et
+                current_indent = len(line) - len(line.lstrip())
+                if line.strip() and current_indent <= ready_indent - 4 and not line.strip().startswith('#'):
+                    # ready() metodu bitti, signal kodunu ekle
+                    new_lines.insert(-1, signal_code)
+                    in_ready = False
+        
+        # Eğer ready() dosyanın sonundaysa
+        if in_ready:
+            new_lines.append(signal_code)
+        
+        content = '\n'.join(new_lines)
+        
+        with open("$APPS_FILE", "w") as f:
+            f.write(content)
+        
+        print("Signal connection apps.py'a eklendi")
+else:
+    print("ready() metodu bulunamadı - manuel ekleme gerekebilir")
+PYEOF
+            
+            log_success "apps.py güncellendi"
+        fi
+    else
+        log_warning "apps.py bulunamadı: $APPS_FILE"
+    fi
 }
 
 # Migration çalıştır
 run_migration() {
     log_info "Database migration çalıştırılıyor..."
     
-    cd "$PAPERLESS_DIR"
+    cd "$PAPERLESS_DIR/src"
     
-    if [[ -f "manage.py" ]]; then
-        python3 manage.py migrate documents --fake-initial 2>/dev/null || true
-        python3 manage.py migrate 2>/dev/null && log_success "Migration tamamlandı" || log_warning "Migration atlandı (zaten uygulanmış olabilir)"
+    if [[ -f "../manage.py" ]]; then
+        cd ..
+        python3 manage.py migrate documents 2>/dev/null && log_success "Migration tamamlandı" || log_warning "Migration atlandı (zaten uygulanmış olabilir)"
+    elif [[ -f "manage.py" ]]; then
+        python3 manage.py migrate documents 2>/dev/null && log_success "Migration tamamlandı" || log_warning "Migration atlandı (zaten uygulanmış olabilir)"
     else
         log_warning "manage.py bulunamadı - Migration manuel çalıştırılmalı"
+        log_info "Komut: python3 manage.py migrate documents"
     fi
+}
+
+# Kurulumu doğrula
+verify_installation() {
+    log_info "Kurulum doğrulanıyor..."
+    
+    # Signal handler dosyası
+    if [[ -f "$PAPERLESS_DIR/src/documents/signals/extraction_handler.py" ]]; then
+        log_success "Signal handler dosyası mevcut"
+    else
+        log_error "Signal handler dosyası eksik!"
+        return 1
+    fi
+    
+    # Migration dosyası
+    if ls "$PAPERLESS_DIR/src/documents/migrations/"*_add_extraction_fields.py 1>/dev/null 2>&1; then
+        log_success "Migration dosyası mevcut"
+    else
+        log_error "Migration dosyası eksik!"
+        return 1
+    fi
+    
+    # Database alanları kontrol et
+    cd "$PAPERLESS_DIR"
+    python3 << PYEOF 2>/dev/null && log_success "Database alanları doğrulandı" || log_warning "Database alanları kontrol edilemedi"
+import os
+import sys
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'paperless.settings')
+sys.path.insert(0, 'src')
+
+django.setup()
+
+from documents.models import CustomField
+
+# Alanları kontrol et
+fields = [f.name for f in CustomField._meta.get_fields()]
+required = ['extraction_enabled', 'extraction_pattern', 'extraction_group']
+
+missing = [f for f in required if f not in fields]
+if missing:
+    print(f"Eksik alanlar: {missing}")
+    sys.exit(1)
+else:
+    print("Tüm extraction alanları mevcut")
+    sys.exit(0)
+PYEOF
+    
+    return 0
 }
 
 # Docker yeniden başlat
@@ -238,9 +442,20 @@ main() {
     run_migration
     
     echo ""
-    log_success "══════════════════════════════════════════════════════════════"
-    log_success "  Kurulum tamamlandı!"
-    log_success "══════════════════════════════════════════════════════════════"
+    log_info "Kurulum doğrulanıyor..."
+    if verify_installation; then
+        echo ""
+        log_success "══════════════════════════════════════════════════════════════"
+        log_success "  Kurulum başarıyla tamamlandı!"
+        log_success "══════════════════════════════════════════════════════════════"
+    else
+        echo ""
+        log_warning "══════════════════════════════════════════════════════════════"
+        log_warning "  Kurulum tamamlandı ancak bazı kontroller başarısız oldu."
+        log_warning "  Lütfen manuel olarak doğrulayın."
+        log_warning "══════════════════════════════════════════════════════════════"
+    fi
+    
     echo ""
     log_info "Sonraki adımlar:"
     echo "  1. Paperless-ngx'i yeniden başlatın"
