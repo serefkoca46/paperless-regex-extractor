@@ -7,20 +7,52 @@ Bu migration CustomField modeline regex extraction alanlarını ekler:
 - extraction_pattern: Regex pattern
 - extraction_group: Hangi capture group kullanılacak (default: 1)
 
-Kullanım:
-    python manage.py migrate documents 0001_add_extraction_fields
+NOT: Bu migration dosyası kurulum sırasında otomatik olarak
+en son migration'a bağımlı hale getirilir.
 """
 
 from django.db import migrations, models
 
 
+def get_latest_migration():
+    """
+    documents app'inin en son migration'ını bul.
+    Bu fonksiyon kurulum scriptinde kullanılır.
+    """
+    import os
+    import re
+    
+    migrations_dir = os.path.dirname(os.path.abspath(__file__))
+    migrations = []
+    
+    for f in os.listdir(migrations_dir):
+        if f.endswith('.py') and not f.startswith('__'):
+            match = re.match(r'^(\d+)_', f)
+            if match:
+                migrations.append((int(match.group(1)), f[:-3]))
+    
+    if migrations:
+        migrations.sort(key=lambda x: x[0], reverse=True)
+        # extraction migration hariç en son migration
+        for num, name in migrations:
+            if 'extraction' not in name:
+                return name
+    
+    return None
+
+
 class Migration(migrations.Migration):
     """
     CustomField modeline regex extraction alanlarını ekleyen migration.
+    
+    Dependency otomatik olarak kurulum sırasında belirlenir.
+    Manuel kurulum için: En son documents migration'ını dependency olarak girin.
     """
 
+    # Bu değer kurulum scriptinde otomatik güncellenir
+    # Örnek: ('documents', '1074_workflowrun_deleted_at_...')
     dependencies = [
-        ('documents', '0046_customfield'),  # CustomField migration'ından sonra
+        ('documents', '__latest__'),  # Placeholder - kurulumda güncellenir
     ]
 
     operations = [
@@ -43,7 +75,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 null=True,
                 verbose_name='Regex Pattern',
-                help_text='Değer çıkarmak için kullanılacak regex pattern. Örnek: (\\d{10})-\\d+-'
+                help_text=r'Değer çıkarmak için kullanılacak regex pattern. Örnek: (\d{10})-\d+-'
             ),
         ),
         
@@ -56,30 +88,5 @@ class Migration(migrations.Migration):
                 verbose_name='Capture Group',
                 help_text='Hangi regex capture group kullanılacak (1 = ilk parantez)'
             ),
-        ),
-    ]
-
-
-class ReversesMigration(migrations.Migration):
-    """
-    Rollback için migration - alanları kaldırır.
-    """
-    
-    dependencies = [
-        ('documents', '0001_add_extraction_fields'),
-    ]
-
-    operations = [
-        migrations.RemoveField(
-            model_name='customfield',
-            name='extraction_enabled',
-        ),
-        migrations.RemoveField(
-            model_name='customfield',
-            name='extraction_pattern',
-        ),
-        migrations.RemoveField(
-            model_name='customfield',
-            name='extraction_group',
         ),
     ]
